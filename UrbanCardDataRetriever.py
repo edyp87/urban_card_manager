@@ -22,25 +22,18 @@ class Card:
 
 
 class UrbanCardDataRetriever:
-    class State:
-        def __init__(self):
-            self.VIEWSTATE = None
-            self.VIEWSTATEGENERATOR = None
-            self.EVENTVALIDATION = None
-            self.response = None
     def __init__(self, username, password):
         self.username = username
         self.password = password
         self.card = None
         self.session = None
-        self.state = self.State()
         self.url = "https://sklep.urbancard.pl/wkz/DefaultIframe.aspx?l=1"
         self.headers = {
             "User-Agent":
-              "Mozilla/5.0 (Windows NT 6.1) "
-              "AppleWebKit/537.36 (KHTML, like Gecko) "
-              "Chrome/37.0.2062.120 "
-              "Safari/537.36"}
+                "Mozilla/5.0 (Windows NT 6.1) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/37.0.2062.120 "
+                "Safari/537.36"}
 
     def getCardsData(self):
         if self.card:
@@ -53,13 +46,9 @@ class UrbanCardDataRetriever:
     def createSession(self):
         self.session = Session()
         self.session.headers.update(self.headers)
-        response = self.session.get(self.url)
-        self.url = response.url
-        print("GET URL       : " + str(response))
-        soup = BeautifulSoup(response.content, "lxml")
-        self.session.VIEWSTATE = soup.find(id="__VIEWSTATE")['value']
-        self.session.VIEWSTATEGENERATOR = soup.find(id="__VIEWSTATEGENERATOR")['value']
-        self.session.EVENTVALIDATION = soup.find(id="__EVENTVALIDATION")['value']
+        self.session.lastResponse = self.session.get(self.url)
+        print("GET URL       : " + str(self.session.lastResponse))
+        self.saveNewState()
 
     def login(self):
         login_data = \
@@ -69,13 +58,11 @@ class UrbanCardDataRetriever:
              "ctl00$tbUserName": self.username,
              "ctl00$tbPassword": self.password,
              "ctl00$btnLogin": "zaloguj"}
-        response = self.session.post(self.url, data=login_data)
-        print("LOGIN         : " + str(response))
-        soup = BeautifulSoup(response.content, "lxml")
-        self.session.VIEWSTATE = soup.find(id="__VIEWSTATE")['value']
-        self.session.VIEWSTATEGENERATOR = soup.find(id="__VIEWSTATEGENERATOR")['value']
-        self.session.EVENTVALIDATION = soup.find(id="__EVENTVALIDATION")['value']
-        self.memberCard = Card(soup.find(id="ctl00_ContentPlaceHolder1_buyControl_ddlMemberCards").option['value'])
+        self.postDataAndStore(login_data)
+        print("LOGIN         : " + str(self.session.lastResponse))
+        self.saveNewState()
+        self.storeCardNumber()
+
 
     def getCardData(self):
         member_data = \
@@ -84,15 +71,11 @@ class UrbanCardDataRetriever:
              "__EVENTVALIDATION": self.session.EVENTVALIDATION,
              "ctl00$ContentPlaceHolder1$buyControl$ddlMemberCards": self.memberCard.cardNumber,
              "ctl00$ContentPlaceHolder1$buyControl$btnAcceptCardChoice": "dalej"}
-        response = self.session.post(self.url, data=member_data)
-        print("GET CARD DATA : " + str(response))
-        soup = BeautifulSoup(response.content, "lxml")
-        self.session.VIEWSTATE = soup.find(id="__VIEWSTATE")['value']
-        self.session.VIEWSTATEGENERATOR = soup.find(id="__VIEWSTATEGENERATOR")['value']
-        self.session.EVENTVALIDATION = soup.find(id="__EVENTVALIDATION")['value']
+        self.postDataAndStore(member_data)
+        print("GET CARD DATA : " + str(self.session.lastResponse))
+        self.saveNewState()
+        self.storeCardData()
 
-        print(re.sub("<.*?>", "", str(BeautifulSoup(response.content, "lxml").find(id="pocketRow").find_all("td")[3])))
-        print(re.sub("<.*?>", "", str(BeautifulSoup(response.content, "lxml").find(id="pocketRow").find_all("td")[4])))
 
     def logout(self):
         logout_data = \
@@ -101,9 +84,27 @@ class UrbanCardDataRetriever:
              "__EVENTVALIDATION": self.session.EVENTVALIDATION,
              "ctl00$btnLogout": "wyloguj"}
 
-        r = self.session.post(self.url, data=logout_data)
-        print("LOGOUT        : " + str(r))
+        self.postDataAndStore(logout_data)
+        print("LOGOUT        : " + str(self.session.lastResponse))
 
+    def saveNewState(self):
+        self.session.lastSoup = BeautifulSoup(self.session.lastResponse.content, "lxml")
+        self.session.VIEWSTATE = self.session.lastSoup.find(id="__VIEWSTATE")['value']
+        self.session.VIEWSTATEGENERATOR = self.session.lastSoup.find(id="__VIEWSTATEGENERATOR")['value']
+        self.session.EVENTVALIDATION = self.session.lastSoup.find(id="__EVENTVALIDATION")['value']
+
+    def postDataAndStore(self, data):
+        self.session.lastResponse = self.session.post(self.session.lastResponse.url, data=data)
+
+    def storeCardNumber(self):
+        self.memberCard = Card(
+            self.session.lastSoup.find(id="ctl00_ContentPlaceHolder1_buyControl_ddlMemberCards").option['value'])
+
+    def storeCardData(self):
+        print(re.sub("<.*?>", "", str(
+            BeautifulSoup(self.session.lastResponse.content, "lxml").find(id="pocketRow").find_all("td")[3])))
+        print(re.sub("<.*?>", "", str(
+            BeautifulSoup(self.session.lastResponse.content, "lxml").find(id="pocketRow").find_all("td")[4])))
 
 
 
