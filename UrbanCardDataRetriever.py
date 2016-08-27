@@ -11,14 +11,16 @@ class Card:
             self.lines = None
 
         def __str__(self):
-            return "asd"
-            # return "Ważna do   : %s\n"\
-            #        "Typ biletu : %s\n"\
-            #        "Linie      : %s\n" % (self.expirationDate, self.ticketType, self.lines)
+             return "Ważna do   : %s\n"\
+                    "Typ biletu : %s\n"\
+                    "Linie      : %s\n" % (self.expirationDate, self.ticketType, self.lines)
 
     def __init__(self, cardNumber):
         self.cardNumber = cardNumber
         self.slot = ( self.Slot(), self.Slot() )
+
+    def getCardNumber(self):
+        return self.cardNumber
 
     def getFirstSlot(self):
         return self.slot[0]
@@ -27,9 +29,7 @@ class Card:
         return self.slot[1]
 
     def __str__(self):
-        return "Numer karty : %s\n" \
-               "1 %s\n" \
-               "2 %s\n" %  (self.cardNumber, self.getFirstSlot(), self.getSecondSlot())
+        return "Numer karty : %s\n%s\n%s\n" % (self.getCardNumber(), self.getFirstSlot(), self.getSecondSlot())
 
 class UrbanCardDataRetriever:
     def __init__(self, username, password):
@@ -46,6 +46,7 @@ class UrbanCardDataRetriever:
         self.login()
         self.getCardData()
         self.logout()
+        return self.card
 
     def createSession(self):
         self.session = Session()
@@ -81,22 +82,18 @@ class UrbanCardDataRetriever:
         self.session.lastResponse = self.session.post(self.session.lastResponse.url, data=data)
 
     def storeCardNumber(self):
-        self.memberCard = Card(
+        self.card = Card(
             self.session.lastSoup.find(id="ctl00_ContentPlaceHolder1_buyControl_ddlMemberCards").option['value'])
 
     def storeCardData(self):
         rowCardFirstSlot  = self.getRowCardSlot(0).split('\n')
         rowCardSecondSlot = self.getRowCardSlot(1).split('\n')
-        self.card = Card(self.memberCard)
         self.card.getFirstSlot().expirationDate = rowCardFirstSlot[2]
         self.card.getFirstSlot().ticketType = rowCardFirstSlot[4]
         self.card.getFirstSlot().lines = rowCardFirstSlot[6]
         self.card.getSecondSlot().expirationDate = rowCardSecondSlot[2]
         self.card.getSecondSlot().ticketType = rowCardSecondSlot[4]
         self.card.getSecondSlot().lines = rowCardSecondSlot[6]
-        #print(str(self.card))
-        print(self.getRowCardSlot(0))
-        print(self.getRowCardSlot(1))
 
     def getRowCardSlot(self, index):
         return re.sub("<.*?>", "", str( self.session.lastSoup.find(id="pocketRow").find_all("td")[index + 3]))
@@ -113,7 +110,7 @@ class UrbanCardDataRetriever:
         return { "__VIEWSTATE"                                              : self.session.VIEWSTATE,
                  "__VIEWSTATEGENERATOR"                                     : self.session.VIEWSTATEGENERATOR,
                  "__EVENTVALIDATION"                                        : self.session.EVENTVALIDATION,
-                 "ctl00$ContentPlaceHolder1$buyControl$ddlMemberCards"      : self.memberCard.cardNumber,
+                 "ctl00$ContentPlaceHolder1$buyControl$ddlMemberCards"      : self.card.cardNumber,
                  "ctl00$ContentPlaceHolder1$buyControl$btnAcceptCardChoice" : "dalej"}
 
     def createLogoutData(self):
