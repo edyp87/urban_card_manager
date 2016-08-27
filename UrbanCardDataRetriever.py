@@ -10,9 +10,15 @@ class Card:
             self.ticketType = None
             self.lines = None
 
+        def __str__(self):
+            return "asd"
+            # return "Ważna do   : %s\n"\
+            #        "Typ biletu : %s\n"\
+            #        "Linie      : %s\n" % (self.expirationDate, self.ticketType, self.lines)
+
     def __init__(self, cardNumber):
         self.cardNumber = cardNumber
-        self.slot = { self.Slot(), self.Slot() }
+        self.slot = ( self.Slot(), self.Slot() )
 
     def getFirstSlot(self):
         return self.slot[0]
@@ -20,6 +26,10 @@ class Card:
     def getSecondSlot(self):
         return self.slot[1]
 
+    def __str__(self):
+        return "Numer karty : %s\n" \
+               "1 %s\n" \
+               "2 %s\n" %  (self.cardNumber, self.getFirstSlot(), self.getSecondSlot())
 
 class UrbanCardDataRetriever:
     def __init__(self, username, password):
@@ -28,16 +38,10 @@ class UrbanCardDataRetriever:
         self.card = None
         self.session = None
         self.url = "https://sklep.urbancard.pl/wkz/DefaultIframe.aspx?l=1"
-        self.headers = {
-            "User-Agent":
-                "Mozilla/5.0 (Windows NT 6.1) "
-                "AppleWebKit/537.36 (KHTML, like Gecko) "
-                "Chrome/37.0.2062.120 "
-                "Safari/537.36"}
 
     def getCardsData(self):
         if self.card:
-            return self.card;
+            return self.card
         self.createSession()
         self.login()
         self.getCardData()
@@ -45,46 +49,26 @@ class UrbanCardDataRetriever:
 
     def createSession(self):
         self.session = Session()
-        self.session.headers.update(self.headers)
         self.session.lastResponse = self.session.get(self.url)
         print("GET URL       : " + str(self.session.lastResponse))
         self.saveNewState()
 
     def login(self):
-        login_data = \
-            {"__VIEWSTATE": self.session.VIEWSTATE,
-             "__VIEWSTATEGENERATOR": self.session.VIEWSTATEGENERATOR,
-             "__EVENTVALIDATION": self.session.EVENTVALIDATION,
-             "ctl00$tbUserName": self.username,
-             "ctl00$tbPassword": self.password,
-             "ctl00$btnLogin": "zaloguj"}
-        self.postDataAndStore(login_data)
+        self.postAndStoreResults(self.createLoginData())
         print("LOGIN         : " + str(self.session.lastResponse))
         self.saveNewState()
         self.storeCardNumber()
 
 
     def getCardData(self):
-        member_data = \
-            {"__VIEWSTATE": self.session.VIEWSTATE,
-             "__VIEWSTATEGENERATOR": self.session.VIEWSTATEGENERATOR,
-             "__EVENTVALIDATION": self.session.EVENTVALIDATION,
-             "ctl00$ContentPlaceHolder1$buyControl$ddlMemberCards": self.memberCard.cardNumber,
-             "ctl00$ContentPlaceHolder1$buyControl$btnAcceptCardChoice": "dalej"}
-        self.postDataAndStore(member_data)
+        self.postAndStoreResults(self.createMemberData())
         print("GET CARD DATA : " + str(self.session.lastResponse))
         self.saveNewState()
         self.storeCardData()
 
 
     def logout(self):
-        logout_data = \
-            {"__VIEWSTATE": self.session.VIEWSTATE,
-             "__VIEWSTATEGENERATOR": self.session.VIEWSTATEGENERATOR,
-             "__EVENTVALIDATION": self.session.EVENTVALIDATION,
-             "ctl00$btnLogout": "wyloguj"}
-
-        self.postDataAndStore(logout_data)
+        self.postAndStoreResults(self.createLogoutData())
         print("LOGOUT        : " + str(self.session.lastResponse))
 
     def saveNewState(self):
@@ -93,7 +77,7 @@ class UrbanCardDataRetriever:
         self.session.VIEWSTATEGENERATOR = self.session.lastSoup.find(id="__VIEWSTATEGENERATOR")['value']
         self.session.EVENTVALIDATION = self.session.lastSoup.find(id="__EVENTVALIDATION")['value']
 
-    def postDataAndStore(self, data):
+    def postAndStoreResults(self, data):
         self.session.lastResponse = self.session.post(self.session.lastResponse.url, data=data)
 
     def storeCardNumber(self):
@@ -101,11 +85,42 @@ class UrbanCardDataRetriever:
             self.session.lastSoup.find(id="ctl00_ContentPlaceHolder1_buyControl_ddlMemberCards").option['value'])
 
     def storeCardData(self):
-        print(re.sub("<.*?>", "", str(
-            BeautifulSoup(self.session.lastResponse.content, "lxml").find(id="pocketRow").find_all("td")[3])))
-        print(re.sub("<.*?>", "", str(
-            BeautifulSoup(self.session.lastResponse.content, "lxml").find(id="pocketRow").find_all("td")[4])))
+        rowCardFirstSlot  = self.getRowCardSlot(0).split('\n')
+        rowCardSecondSlot = self.getRowCardSlot(1).split('\n')
+        self.card = Card(self.memberCard)
+        self.card.getFirstSlot().expirationDate = rowCardFirstSlot[2]
+        self.card.getFirstSlot().ticketType = rowCardFirstSlot[4]
+        self.card.getFirstSlot().lines = rowCardFirstSlot[6]
+        self.card.getSecondSlot().expirationDate = rowCardSecondSlot[2]
+        self.card.getSecondSlot().ticketType = rowCardSecondSlot[4]
+        self.card.getSecondSlot().lines = rowCardSecondSlot[6]
+        #print(str(self.card))
+        print(self.getRowCardSlot(0))
+        print(self.getRowCardSlot(1))
 
+    def getRowCardSlot(self, index):
+        return re.sub("<.*?>", "", str( self.session.lastSoup.find(id="pocketRow").find_all("td")[index + 3]))
+
+    def createLoginData(self):
+        return { "__VIEWSTATE"          : self.session.VIEWSTATE,
+                 "__VIEWSTATEGENERATOR" : self.session.VIEWSTATEGENERATOR,
+                 "__EVENTVALIDATION"    : self.session.EVENTVALIDATION,
+                 "ctl00$tbUserName"     : self.username,
+                 "ctl00$tbPassword"     : self.password,
+                 "ctl00$btnLogin"       : "zaloguj" }
+
+    def createMemberData(self):
+        return { "__VIEWSTATE"                                              : self.session.VIEWSTATE,
+                 "__VIEWSTATEGENERATOR"                                     : self.session.VIEWSTATEGENERATOR,
+                 "__EVENTVALIDATION"                                        : self.session.EVENTVALIDATION,
+                 "ctl00$ContentPlaceHolder1$buyControl$ddlMemberCards"      : self.memberCard.cardNumber,
+                 "ctl00$ContentPlaceHolder1$buyControl$btnAcceptCardChoice" : "dalej"}
+
+    def createLogoutData(self):
+        return { "__VIEWSTATE"          : self.session.VIEWSTATE,
+                 "__VIEWSTATEGENERATOR" : self.session.VIEWSTATEGENERATOR,
+                 "__EVENTVALIDATION"    : self.session.EVENTVALIDATION,
+                 "ctl00$btnLogout"      : "wyloguj"}
 
 
 
