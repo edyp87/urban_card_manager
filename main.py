@@ -23,7 +23,7 @@ def getUserDataFromConsole():
 
 
 
-username, password = getUserDataFromFile()
+username, password = getUserDataFromConsole()
 Card = UrbanCardDataRetriever.UrbanCardDataRetriever(username, password).getCardsData()
 
 ColorPrinter.printBlue(str(Card.getCardNumber()))
